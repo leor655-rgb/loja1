@@ -1,0 +1,76 @@
+import {
+  pgTable,
+  serial,
+  text,
+  integer,
+  boolean,
+  timestamp,
+  jsonb,
+  real,
+} from "drizzle-orm/pg-core";
+
+export type ColorOption = { name: string; hex: string };
+
+export type OrderItem = {
+  productId: number;
+  slug: string;
+  name: string;
+  image: string;
+  size: string;
+  color: string;
+  price: number; // cents
+  qty: number;
+};
+
+export const products = pgTable("products", {
+  id: serial("id").primaryKey(),
+  slug: text("slug").notNull().unique(),
+  name: text("name").notNull(),
+  category: text("category").notNull(), // "camiseta" | "short"
+  gender: text("gender").notNull(), // "homem" | "mulher"
+  price: integer("price").notNull(), // cents
+  // Optional original price for showing discounts.
+  compareAt: integer("compare_at"),
+  description: text("description").notNull(),
+  details: text("details").array().notNull().default([]),
+  sizes: text("sizes").array().notNull().default([]),
+  colors: jsonb("colors").$type<ColorOption[]>().notNull().default([]),
+  images: text("images").array().notNull().default([]),
+  rating: real("rating").notNull().default(0),
+  reviewCount: integer("review_count").notNull().default(0),
+  badge: text("badge"), // "Novo", "Mais vendido", "Promoção"
+  featured: boolean("featured").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const reviews = pgTable("reviews", {
+  id: serial("id").primaryKey(),
+  productId: integer("product_id")
+    .notNull()
+    .references(() => products.id, { onDelete: "cascade" }),
+  author: text("author").notNull(),
+  rating: integer("rating").notNull(),
+  title: text("title").notNull(),
+  body: text("body").notNull(),
+  verified: boolean("verified").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const orders = pgTable("orders", {
+  id: serial("id").primaryKey(),
+  customerName: text("customer_name").notNull(),
+  email: text("email").notNull(),
+  address: text("address").notNull(),
+  city: text("city").notNull(),
+  state: text("state").notNull(),
+  postalCode: text("postal_code").notNull(),
+  total: integer("total").notNull(), // cents
+  items: jsonb("items").$type<OrderItem[]>().notNull().default([]),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export type Product = typeof products.$inferSelect;
+export type NewProduct = typeof products.$inferInsert;
+export type Review = typeof reviews.$inferSelect;
+export type NewReview = typeof reviews.$inferInsert;
+export type Order = typeof orders.$inferSelect;

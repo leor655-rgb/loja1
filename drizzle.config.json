@@ -1,0 +1,141 @@
+"use client";
+
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
+import { useEffect, useState, useCallback } from "react";
+
+const CATEGORIES = [
+  { value: "todos", label: "TUDO" },
+  { value: "camiseta", label: "CAMISETAS HEAVY" },
+  { value: "short", label: "SHORTS STREET" },
+];
+
+const SORTS = [
+  { value: "relevance", label: "Relevância" },
+  { value: "price-asc", label: "Menor preço" },
+  { value: "price-desc", label: "Maior preço" },
+  { value: "rating", label: "Melhor avaliados" },
+  { value: "newest", label: "Novidades" },
+];
+
+export function ShopControls({ total }: { total: number }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const params = useSearchParams();
+
+  const categoria = params.get("categoria") ?? "todos";
+  const ordenar = params.get("ordenar") ?? "relevance";
+  const busca = params.get("busca") ?? "";
+
+  const [query, setQuery] = useState(busca);
+
+  useEffect(() => setQuery(busca), [busca]);
+
+  const update = useCallback(
+    (key: string, value: string) => {
+      const next = new URLSearchParams(params.toString());
+      if (value === "todos" && key !== "ordenar") {
+        next.delete(key);
+      } else if (key === "ordenar" && value === "relevance") {
+        next.delete(key);
+      } else {
+        next.set(key, value);
+      }
+      const qs = next.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    },
+    [params, pathname, router],
+  );
+
+  useEffect(() => {
+    if (query === busca) return;
+    const t = setTimeout(() => update("busca", query), 350);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query]);
+
+  const Pill = ({
+    active,
+    label,
+    onClick,
+  }: {
+    active: boolean;
+    label: string;
+    onClick: () => void;
+  }) => (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`px-5 py-2.5 text-xs font-black uppercase tracking-widest transition-colors ${
+        active
+          ? "bg-pine text-white"
+          : "border border-line bg-cream-2 text-ink-soft hover:border-ink hover:text-white"
+      }`}
+    >
+      {label}
+    </button>
+  );
+
+  return (
+    <div className="border-y border-line bg-cream/90 backdrop-blur">
+      <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="mr-2 text-[10px] font-black uppercase tracking-widest text-muted">
+              Filtro
+            </span>
+            {CATEGORIES.map((c) => (
+              <Pill
+                key={c.value}
+                active={categoria === c.value}
+                label={c.label}
+                onClick={() => update("categoria", c.value)}
+              />
+            ))}
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <svg
+                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <circle cx="11" cy="11" r="7" />
+                <path d="M21 21l-4.3-4.3" />
+              </svg>
+              <input
+                type="search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="PROCURAR PEÇA..."
+                className="w-40 rounded-none border border-line bg-cream py-2 pl-9 pr-3 text-xs font-bold uppercase tracking-wider outline-none focus:border-ink sm:w-52"
+              />
+            </div>
+            <label className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-muted">
+              <span>Ordenar</span>
+              <select
+                value={ordenar}
+                onChange={(e) => update("ordenar", e.target.value)}
+                className="rounded-none border border-line bg-cream px-3 py-2 text-xs font-bold text-ink outline-none focus:border-ink"
+              >
+                {SORTS.map((s) => (
+                  <option key={s.value} value={s.value}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        </div>
+
+        <p className="mt-3 text-[10px] font-bold uppercase tracking-widest text-muted">
+          {total} {total === 1 ? "PEÇA ENCONTRADA" : "PEÇAS DISPONÍVEIS"}
+        </p>
+      </div>
+    </div>
+  );
+}

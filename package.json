@@ -1,0 +1,51 @@
+import { drizzle } from "drizzle-orm/node-postgres";
+import type { NodePgDatabase } from "drizzle-orm/node-postgres";
+import { Pool } from "pg";
+import * as schema from "./schema";
+
+// Tipagem forte: o banco "conhece" nossas tabelas → autocomplete e validação.
+type Database = NodePgDatabase<typeof schema>;
+
+const globalForDb = globalThis as typeof globalThis & {
+  __arenaNextJsPostgresqlPool?: Pool;
+  __arenaNextJsPostgresqlDb?: Database;
+};
+
+function getDb(): Database {
+  if (globalForDb.__arenaNextJsPostgresqlDb) {
+    return globalForDb.__arenaNextJsPostgresqlDb;
+  }
+
+  const databaseUrl = process.env.DATABASE_URL;
+  if (!databaseUrl) {
+    // Lançado apenas no primeiro USO do banco — nunca no import do módulo.
+    // Isso permite que `next build` importe as rotas com sucesso mesmo em
+    // ambientes onde DATABASE_URL só está disponível em runtime.
+    throw new Error("DATABASE_URL is required");
+  }
+
+  const pool =
+    globalForDb.__arenaNextJsPostgresqlPool ??
+    new Pool({ connectionString: databaseUrl });
+
+  if (process.env.NODE_ENV !== "production") {
+    globalForDb.__arenaNextJsPostgresqlPool = pool;
+  }
+
+  const database = drizzle(pool, { schema });
+  globalForDb.__arenaNextJsPostgresqlDb = database;
+  return database;
+}
+
+/**
+ * Client lazy do banco. Importar `@/db` nunca abre conexão nem lança erro;
+ * a conexão é criada na primeira chamada de método (ex.: `db.select(...)`).
+ *
+ * O Proxy delega tudo para a instância real via Reflect.get, preservando o
+ * `this` interno do Drizzle sem precisar de `.bind()`.
+ */
+export const db: Database = new Proxy({} as Database, {
+  get(_target, prop) {
+    return Reflect.get(getDb(), prop);
+  },
+});

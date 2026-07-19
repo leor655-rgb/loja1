@@ -1,0 +1,82 @@
+import { createOrder } from "@/db/queries";
+import type { OrderItem } from "@/db/schema";
+
+export const dynamic = "force-dynamic";
+
+type CheckoutBody = {
+  customerName?: string;
+  email?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  postalCode?: string;
+  items?: OrderItem[];
+};
+
+function isOrderItem(x: unknown): x is OrderItem {
+  if (typeof x !== "object" || x === null) return false;
+  const o = x as Record<string, unknown>;
+  return (
+    typeof o.productId === "number" &&
+    typeof o.slug === "string" &&
+    typeof o.name === "string" &&
+    typeof o.size === "string" &&
+    typeof o.color === "string" &&
+    typeof o.price === "number" &&
+    typeof o.qty === "number"
+  );
+}
+
+export async function POST(req: Request) {
+  let body: CheckoutBody;
+  try {
+    body = (await req.json()) as CheckoutBody;
+  } catch {
+    return Response.json({ error: "JSON inválido" }, { status: 400 });
+  }
+
+  const customerName = (body.customerName ?? "").trim();
+  const email = (body.email ?? "").trim();
+  const address = (body.address ?? "").trim();
+  const city = (body.city ?? "").trim();
+  const state = (body.state ?? "").trim();
+  const postalCode = (body.postalCode ?? "").trim();
+  const items = Array.isArray(body.items) ? body.items : [];
+
+  if (
+    customerName.length < 2 ||
+    !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) ||
+    address.length < 4 ||
+    city.length < 2 ||
+    state.length < 2 ||
+    postalCode.length < 4 ||
+    items.length === 0 ||
+    !items.every(isOrderItem)
+  ) {
+    return Response.json(
+      { error: "Dados do pedido incompletos ou inválidos." },
+      { status: 400 },
+    );
+  }
+
+  // Reject absurd prices as a light sanity guard.
+  const safeItems = items
+    .filter((i) => i.price > 0 && i.price < 1_000_000 && i.qty > 0 && i.qty <= 50)
+    .map((i) => ({ ...i, image: String(i.image).slice(0, 500) }));
+
+  if (safeItems.length === 0) {
+    return Response.json({ error: "Nenhum item válido." }, { status: 400 });
+  }
+
+  const order = await createOrder({
+    customerName: customerName.slice(0, 120),
+    email: email.slice(0, 160).toLowerCase(),
+    address: address.slice(0, 200),
+    city: city.slice(0, 80),
+    state: state.slice(0, 4).toUpperCase(),
+    postalCode: postalCode.slice(0, 12),
+    items: safeItems,
+  });
+
+  return Response.json({ ok: true, orderId: order.id });
+}
